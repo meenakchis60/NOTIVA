@@ -1,90 +1,142 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import academicsService from '../../api/academicsService';
 
-export default function CascadingFilter({ onFilterChange, initialValues = {} }) {
+function CascadingFilter({ onFilterChange, initialValues = {} }) {
   const [semesterId, setSemesterId] = useState(initialValues.semester_id || '');
   const [subjectId, setSubjectId] = useState(initialValues.subject_id || '');
   const [notebookId, setNotebookId] = useState(initialValues.notebook_id || '');
+
+  // Helper to safely extract results array from any response shape
+  const extractList = (res) => {
+    const raw = res?.data;
+    if (Array.isArray(raw)) return raw;
+    if (Array.isArray(raw?.results)) return raw.results;
+    if (Array.isArray(raw?.data?.results)) return raw.data.results;
+    if (Array.isArray(raw?.data)) return raw.data;
+    return [];
+  };
 
   // Semesters
   const { data: semestersRes, isLoading: loadingSemesters } = useQuery({
     queryKey: ['semesters'],
     queryFn: () => academicsService.getSemesters(),
   });
-  const semesters = semestersRes?.data?.results || [];
+  const semesters = extractList(semestersRes);
 
   // Subjects (dependent on Semester)
   const { data: subjectsRes, isLoading: loadingSubjects } = useQuery({
     queryKey: ['subjects', semesterId],
     queryFn: () => academicsService.getSubjectsBySemester(semesterId),
-    enabled: !!semesterId,
+    enabled: Boolean(semesterId),
   });
-  const subjects = subjectsRes?.data?.results || [];
+  const subjects = extractList(subjectsRes);
 
   // Notebooks (dependent on Subject)
   const { data: notebooksRes, isLoading: loadingNotebooks } = useQuery({
     queryKey: ['notebooks', subjectId],
     queryFn: () => academicsService.getNotebooksBySubject(subjectId),
-    enabled: !!subjectId,
+    enabled: Boolean(subjectId),
   });
-  const notebooks = notebooksRes?.data?.results || [];
+  const notebooks = extractList(notebooksRes);
 
-  // Cascade resets
+  // Synchronize initialValues when they load asynchronously
   useEffect(() => {
-    if (semesterId) {
-      if (!subjects.find(s => s.id === subjectId)) {
-        setSubjectId('');
-      }
-    } else {
-      setSubjectId('');
+    if (initialValues.semester_id !== undefined && initialValues.semester_id !== semesterId) {
+      setSemesterId(initialValues.semester_id || '');
     }
-  }, [semesterId, subjects]);
-
-  useEffect(() => {
-    if (subjectId) {
-      if (!notebooks.find(n => n.id === notebookId)) {
-        setNotebookId('');
-      }
-    } else {
-      setNotebookId('');
+    if (initialValues.subject_id !== undefined && initialValues.subject_id !== subjectId) {
+      setSubjectId(initialValues.subject_id || '');
     }
-  }, [subjectId, notebooks]);
+    if (initialValues.notebook_id !== undefined && initialValues.notebook_id !== notebookId) {
+      setNotebookId(initialValues.notebook_id || '');
+    }
+  }, [initialValues.semester_id, initialValues.subject_id, initialValues.notebook_id]);
 
-  // Report changes
-  useEffect(() => {
-    onFilterChange({
-      semester_id: semesterId || undefined,
-      subject_id: subjectId || undefined,
-      notebook_id: notebookId || undefined,
-    });
-  }, [semesterId, subjectId, notebookId]);
+  const handleSemesterChange = (newSem) => {
+    setSemesterId(newSem);
+    setSubjectId('');
+    setNotebookId('');
+    if (onFilterChange) {
+      onFilterChange({
+        semester_id: newSem || undefined,
+        subject_id: undefined,
+        notebook_id: undefined,
+      });
+    }
+  };
+
+  const handleSubjectChange = (newSub) => {
+    setSubjectId(newSub);
+    setNotebookId('');
+    if (onFilterChange) {
+      onFilterChange({
+        semester_id: semesterId || undefined,
+        subject_id: newSub || undefined,
+        notebook_id: undefined,
+      });
+    }
+  };
+
+  const handleNotebookChange = (newNb) => {
+    setNotebookId(newNb);
+    if (onFilterChange) {
+      onFilterChange({
+        semester_id: semesterId || undefined,
+        subject_id: subjectId || undefined,
+        notebook_id: newNb || undefined,
+      });
+    }
+  };
 
   return (
-    <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', marginBottom: '1rem' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label>Semester</label>
-        <select value={semesterId} onChange={(e) => setSemesterId(e.target.value)} disabled={loadingSemesters} style={{ padding: '8px' }}>
+    <div className="grid grid-cols-1 md-grid-cols-3 gap-3 w-full">
+      <div className="flex-col gap-1.5" style={{ minWidth: '160px' }}>
+        <label className="text-xs font-semibold text-muted uppercase tracking-wider">Semester</label>
+        <select 
+          value={semesterId} 
+          onChange={(e) => handleSemesterChange(e.target.value)} 
+          disabled={loadingSemesters} 
+          className="p-2.5 border rounded-lg bg-bg text-sm font-medium w-full focus:outline-primary"
+        >
           <option value="">All Semesters</option>
-          {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {semesters.map(s => (
+            <option key={s.id || s._id} value={s.id || s._id}>{s.name}</option>
+          ))}
         </select>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label>Subject</label>
-        <select value={subjectId} onChange={(e) => setSubjectId(e.target.value)} disabled={!semesterId || loadingSubjects} style={{ padding: '8px' }}>
+      <div className="flex-col gap-1.5" style={{ minWidth: '160px' }}>
+        <label className="text-xs font-semibold text-muted uppercase tracking-wider">Subject</label>
+        <select 
+          value={subjectId} 
+          onChange={(e) => handleSubjectChange(e.target.value)} 
+          disabled={!semesterId || loadingSubjects} 
+          className="p-2.5 border rounded-lg bg-bg text-sm font-medium w-full focus:outline-primary disabled:opacity-50"
+        >
           <option value="">{semesterId ? 'All Subjects' : 'Select Semester First'}</option>
-          {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          {subjects.map(s => (
+            <option key={s.id || s._id} value={s.id || s._id}>{s.name}</option>
+          ))}
         </select>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        <label>Notebook</label>
-        <select value={notebookId} onChange={(e) => setNotebookId(e.target.value)} disabled={!subjectId || loadingNotebooks} style={{ padding: '8px' }}>
+      <div className="flex-col gap-1.5" style={{ minWidth: '160px' }}>
+        <label className="text-xs font-semibold text-muted uppercase tracking-wider">Notebook</label>
+        <select 
+          value={notebookId} 
+          onChange={(e) => handleNotebookChange(e.target.value)} 
+          disabled={!subjectId || loadingNotebooks} 
+          className="p-2.5 border rounded-lg bg-bg text-sm font-medium w-full focus:outline-primary disabled:opacity-50"
+        >
           <option value="">{subjectId ? 'All Notebooks' : 'Select Subject First'}</option>
-          {notebooks.map(n => <option key={n.id} value={n.id}>{n.name}</option>)}
+          {notebooks.map(n => (
+            <option key={n.id || n._id} value={n.id || n._id}>{n.name}</option>
+          ))}
         </select>
       </div>
     </div>
   );
 }
+
+export default React.memo(CascadingFilter);

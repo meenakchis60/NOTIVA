@@ -3,10 +3,11 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import notesService from '../../api/notesService';
 import CascadingFilter from '../../components/academics/CascadingFilter';
+import { Edit, Save, ArrowLeft, Loader2, BookOpen, AlertCircle, FileText } from 'lucide-react';
 
 export default function NoteFormPage() {
   const { noteId } = useParams();
-  const isEditing = noteId && noteId !== 'new';
+  const isEditing = Boolean(noteId && noteId !== 'new' && noteId !== 'undefined');
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -21,7 +22,6 @@ export default function NoteFormPage() {
   const [hierarchy, setHierarchy] = useState({ semester_id: '', subject_id: '', notebook_id: '' });
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Fetch existing if editing
   const { data: noteRes, isLoading } = useQuery({
     queryKey: ['note', noteId],
     queryFn: () => notesService.getNote(noteId),
@@ -30,7 +30,7 @@ export default function NoteFormPage() {
 
   useEffect(() => {
     if (isEditing && noteRes?.data) {
-      const n = noteRes.data;
+      const n = noteRes.data.data || noteRes.data;
       setFormData({
         title: n.title,
         content: n.content,
@@ -38,15 +38,16 @@ export default function NoteFormPage() {
         is_study_material: n.is_study_material,
         difficulty: n.difficulty || 'BEGINNER',
       });
-      // Actually we'd need to fetch the hierarchy for the notebook to pre-populate CascadingFilter, 
-      // but if the backend returns notebook_id we can just allow the user to keep it or re-select.
-      setHierarchy(prev => ({ ...prev, notebook_id: n.notebook_id }));
+      setHierarchy({
+        semester_id: n.semester_id || '',
+        subject_id: n.subject_id || '',
+        notebook_id: n.notebook_id || ''
+      });
     }
   }, [isEditing, noteRes]);
 
   const mutation = useMutation({
     mutationFn: (data) => {
-      // The API expects 'notebook' (uuid) instead of 'notebook_id'
       const payload = { ...data, notebook: hierarchy.notebook_id || formData.notebook_id };
       delete payload.notebook_id;
 
@@ -56,9 +57,9 @@ export default function NoteFormPage() {
         return notesService.createNote(payload);
       }
     },
-    onSuccess: (res) => {
+    onSuccess: () => {
       queryClient.invalidateQueries(['notes']);
-      navigate(`/notes/${res.data.id}`);
+      navigate('/notes');
     },
     onError: (err) => {
       setErrorMsg(err.response?.data?.detail || JSON.stringify(err.response?.data) || 'Failed to save note');
@@ -68,71 +69,116 @@ export default function NoteFormPage() {
   const handleSubmit = (e) => {
     e.preventDefault();
     setErrorMsg('');
-    if (!hierarchy.notebook_id && !formData.notebook_id) {
-      setErrorMsg('Please select a Notebook.');
-      return;
-    }
     mutation.mutate(formData);
   };
 
-  const handleCascadeChange = (vals) => {
+  const handleCascadeChange = React.useCallback((vals) => {
     setHierarchy(vals);
-  };
+  }, []);
 
-  if (isEditing && isLoading) return <p>Loading...</p>;
+  if (isEditing && isLoading) return (
+    <div className="empty-state">
+      <Loader2 className="loading-spinner mb-4" />
+      <h3 className="font-semibold">Loading note...</h3>
+    </div>
+  );
 
   return (
-    <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto' }}>
-      <h1>{isEditing ? 'Edit Note' : 'Create Note'}</h1>
+    <div className="flex-col w-full" style={{ maxWidth: '800px', margin: '0 auto' }}>
+      <button onClick={() => navigate(-1)} className="btn-secondary flex items-center gap-2 mb-6" style={{ alignSelf: 'flex-start', border: 'none', background: 'transparent', padding: '0', color: 'var(--color-text-secondary)' }}>
+        <ArrowLeft size={16} /> Back
+      </button>
+
+      <div className="page-header mb-6">
+        <div>
+          <h1 className="page-title flex items-center gap-3">
+            <FileText size={32} className="text-primary" /> {isEditing ? 'Edit Note' : 'Create New Note'}
+          </h1>
+        </div>
+      </div>
       
-      {errorMsg && <div className="form-error">{errorMsg}</div>}
+      {errorMsg && (
+        <div className="p-4 mb-6 rounded-lg bg-danger border font-medium text-danger flex items-center gap-2">
+          <AlertCircle size={18} /> {errorMsg}
+        </div>
+      )}
 
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-        <div style={{ background: 'var(--color-surface-raised)', padding: '15px', borderRadius: '8px' }}>
-          <h4>Location</h4>
-          <CascadingFilter onFilterChange={handleCascadeChange} initialValues={hierarchy} />
-          {!hierarchy.notebook_id && formData.notebook_id && <p>Keeping current notebook. Use the filters to move.</p>}
+      <form onSubmit={handleSubmit} className="flex-col gap-6">
+        <div className="card shadow-sm border rounded-lg p-6 bg-surface">
+          <h4 className="font-semibold mb-4 border-bottom pb-2">1. Academic Location</h4>
+          <div className="w-full">
+            <CascadingFilter onFilterChange={handleCascadeChange} initialValues={hierarchy} />
+          </div>
+          {!hierarchy.notebook_id && formData.notebook_id && (
+            <p className="text-muted mt-4 text-sm bg-bg p-3 rounded-lg border inline-block">
+              Currently keeping existing notebook. Use the filters above if you want to move this note.
+            </p>
+          )}
         </div>
 
-        <div className="form-group">
-          <label>Title</label>
-          <input required value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} />
+        <div className="card shadow-sm border rounded-lg p-6 bg-surface flex-col gap-4">
+          <h4 className="font-semibold mb-2 border-bottom pb-2">2. Note Content</h4>
+          
+          <div className="form-group flex-col gap-2">
+            <label className="font-medium text-sm">Title</label>
+            <input 
+              required 
+              value={formData.title} 
+              onChange={e => setFormData({...formData, title: e.target.value})} 
+              placeholder="e.g. Introduction to Thermodynamics"
+              className="p-3 border rounded-lg w-full text-lg font-medium"
+            />
+          </div>
+
+          <div className="form-group flex-col gap-2">
+            <label className="font-medium text-sm">Content</label>
+            <textarea 
+              required 
+              rows="12" 
+              className="p-4 border rounded-lg w-full font-mono text-sm"
+              style={{ resize: 'vertical', lineHeight: '1.6' }}
+              value={formData.content} 
+              onChange={e => setFormData({...formData, content: e.target.value})} 
+              placeholder="# Markdown supported..."
+            />
+          </div>
         </div>
 
-        <div className="form-group">
-          <label>Content</label>
-          <textarea 
-            required 
-            rows="10" 
-            style={{ width: '100%', padding: '10px', fontFamily: 'inherit', border: '1px solid var(--color-input-border)', borderRadius: '8px' }}
-            value={formData.content} 
-            onChange={e => setFormData({...formData, content: e.target.value})} 
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: '20px', alignItems: 'center', background: 'var(--color-surface-raised)', padding: '15px', borderRadius: '8px' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-            <input type="checkbox" checked={formData.is_study_material} onChange={e => setFormData({...formData, is_study_material: e.target.checked})} />
-            Is Study Material
+        <div className="card shadow-sm border rounded-lg p-6 bg-surface flex items-center gap-6">
+          <label className="flex items-center gap-3 cursor-pointer font-medium p-3 bg-bg border rounded-lg hover-bg-light transition-all">
+            <input 
+              type="checkbox" 
+              checked={formData.is_study_material} 
+              onChange={e => setFormData({...formData, is_study_material: e.target.checked})} 
+              className="w-5 h-5 cursor-pointer"
+            />
+            <BookOpen size={18} className="text-primary"/> Mark as Study Material
           </label>
 
           {formData.is_study_material && (
-            <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-              Difficulty:
-              <select value={formData.difficulty} onChange={e => setFormData({...formData, difficulty: e.target.value})} style={{ padding: '5px' }}>
+            <div className="flex items-center gap-3">
+              <label className="font-medium text-sm">Difficulty:</label>
+              <select 
+                value={formData.difficulty} 
+                onChange={e => setFormData({...formData, difficulty: e.target.value})} 
+                className="p-2 border rounded-lg bg-bg"
+              >
                 <option value="BEGINNER">Beginner</option>
                 <option value="INTERMEDIATE">Intermediate</option>
                 <option value="ADVANCED">Advanced</option>
               </select>
-            </label>
+            </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button type="submit" className="btn-primary" disabled={mutation.isPending}>
+        <div className="flex justify-end gap-4 mt-2">
+          <button type="button" onClick={() => navigate(-1)} className="btn-secondary" style={{ padding: '0.75rem 1.5rem' }}>
+            Cancel
+          </button>
+          <button type="submit" className="btn-primary flex items-center gap-2" disabled={mutation.isPending} style={{ padding: '0.75rem 2rem' }}>
+            {mutation.isPending ? <Loader2 className="loading-spinner w-4 h-4" /> : <Save size={18} />}
             {mutation.isPending ? 'Saving...' : 'Save Note'}
           </button>
-          <button type="button" onClick={() => navigate(-1)} style={{ padding: '10px 20px' }}>Cancel</button>
         </div>
       </form>
     </div>

@@ -13,7 +13,7 @@
 
 import axios from 'axios'
 
-const BASE_URL = import.meta.env.VITE_API_URL || '/api/v1'
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 // ---------------------------------------------------------------------------
 // Primary instance used by all service modules
@@ -79,7 +79,7 @@ axiosInstance.interceptors.response.use(
         localStorage.removeItem('notiva_access')
         localStorage.removeItem('notiva_refresh')
         localStorage.removeItem('notiva_user')
-        window.location.href = '/login'
+        window.location.href = '#/login'
         return Promise.reject(refreshError)
       }
     }

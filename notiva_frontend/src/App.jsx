@@ -65,6 +65,9 @@ function App() {
                 <Route path="/notes/new" element={<NoteFormPage />} />
                 <Route path="/notes/:noteId" element={<NoteDetailPage />} />
                 <Route path="/notes/:noteId/edit" element={<NoteFormPage />} />
+                <Route path="/notebooks" element={<AcademicsPage />} />
+                <Route path="/search" element={<NotesPage />} />
+                <Route path="/reminders" element={<StudyPage />} />
                 <Route path="/study" element={<StudyPage />} />
                 <Route path="/groups" element={<GroupsPage />} />
                 <Route path="/trash" element={<TrashPage />} />

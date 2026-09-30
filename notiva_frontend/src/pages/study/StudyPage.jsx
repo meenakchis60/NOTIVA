@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { studyService, goalsService } from '../../api/studyService';
 import CascadingFilter from '../../components/academics/CascadingFilter';
-import { Play, Square, History, Target, Clock } from 'lucide-react';
+import { Play, Square, History, Target, Clock, X, Timer } from 'lucide-react';
 
 export default function StudyPage() {
   const queryClient = useQueryClient();
@@ -23,61 +23,135 @@ export default function StudyPage() {
   const cancMut = useMutation({ mutationFn: (id) => studyService.cancelSession(id), onSuccess: () => { queryClient.invalidateQueries(['activeSession']); queryClient.invalidateQueries(['studyHistory']); } });
 
   return (
-    <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
-      <h1 style={{ marginBottom: '2rem' }}>Study Workspace</h1>
+    <div className="flex-col w-full">
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Study Workspace</h1>
+          <p className="text-muted mt-4">Track your focus sessions and academic goals.</p>
+        </div>
+      </div>
       
-      <div className="card" style={{ marginBottom: '2rem', borderLeft: '4px solid var(--color-primary)' }}>
-        <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}><Play size={20} /> Active Session</h2>
+      <div className="card shadow-md border rounded-lg mb-6" style={{ borderLeft: '4px solid var(--color-primary)' }}>
+        <h2 className="flex items-center gap-2 mb-4 font-semibold text-xl"><Timer className="text-primary" size={24} /> Active Session</h2>
+        
         {activeSession ? (
-          <div>
-            <p style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>Started at {new Date(activeSession.started_at).toLocaleTimeString()}</p>
-            {activeSession.note_title && <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>Studying: {activeSession.note_title}</p>}
-            <div style={{ display: 'flex', gap: '1rem' }}>
-              <button className="btn-primary" onClick={() => compMut.mutate(activeSession.id)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'var(--color-success)' }}><Square size={16} /> Complete Session</button>
-              <button className="btn-danger" onClick={() => cancMut.mutate(activeSession.id)}>Cancel Session</button>
+          <div className="bg-bg p-6 rounded-lg border flex flex-col md-flex-row justify-between items-center gap-6">
+            <div>
+              <p className="text-2xl font-bold text-primary mb-2">In Progress</p>
+              <p className="text-muted flex items-center gap-2"><Clock size={16}/> Started at {new Date(activeSession.started_at).toLocaleTimeString()}</p>
+              {activeSession.note_title && (
+                <div className="mt-4 p-3 bg-surface border rounded-lg">
+                  <p className="text-sm text-muted">Currently Studying</p>
+                  <p className="font-semibold">{activeSession.note_title}</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex gap-4">
+              <button 
+                className="btn-primary flex items-center gap-2" 
+                onClick={() => compMut.mutate(activeSession.id)}
+                style={{ background: 'var(--color-success)', padding: '1rem 2rem', fontSize: '1.125rem' }}
+              >
+                <Square size={20} /> Complete Session
+              </button>
+              <button 
+                className="btn-secondary flex items-center gap-2" 
+                onClick={() => { if(window.confirm('Cancel this session? Time will not be recorded.')) cancMut.mutate(activeSession.id); }}
+                style={{ padding: '1rem' }}
+              >
+                <X size={20} /> Cancel
+              </button>
             </div>
           </div>
         ) : (
-          <div>
-            <p style={{ color: 'var(--color-text-secondary)', marginBottom: '1rem' }}>No active study session.</p>
-            <button className="btn-primary" onClick={() => startMut.mutate()} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}><Play size={16} /> Start Session</button>
+          <div className="empty-state bg-bg p-8" style={{ border: '2px dashed var(--color-border)', borderRadius: '12px' }}>
+            <Timer size={48} className="text-muted mb-4" />
+            <h3 className="font-semibold mb-2">Ready to focus?</h3>
+            <p className="text-muted mb-6">Start a new study session to track your time and progress.</p>
+            <button 
+              className="btn-primary flex items-center gap-2" 
+              onClick={() => startMut.mutate()}
+              style={{ padding: '0.75rem 2rem', fontSize: '1.125rem' }}
+            >
+              <Play size={20} /> Start Study Session
+            </button>
           </div>
         )}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '2rem' }}>
-        <div className="card">
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}><History size={20} /> History</h2>
-          <CascadingFilter onFilterChange={setSessionFilters} />
-          <div style={{ marginTop: '1rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {history.map(s => (
-              <div key={s.id} style={{ padding: '1rem', background: 'var(--color-bg-secondary)', borderRadius: '6px', display: 'flex', justifyContent: 'space-between' }}>
+      <div className="grid grid-cols-1 lg-grid-cols-3 gap-6">
+        <div className="card shadow-sm border rounded-lg" style={{ gridColumn: 'span 2' }}>
+          <div className="flex justify-between items-center mb-6 pb-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <h2 className="flex items-center gap-2 font-semibold text-lg"><History className="text-primary" size={20} /> Study History</h2>
+          </div>
+          
+          <div className="mb-6 p-4 bg-bg rounded-lg border">
+            <h4 className="text-sm font-semibold text-muted mb-3">Filter History</h4>
+            <div className="w-full">
+              <CascadingFilter onFilterChange={setSessionFilters} />
+            </div>
+          </div>
+          
+          <div className="flex-col gap-4">
+            {history.length > 0 ? history.map(s => (
+              <div key={s.id} className="flex justify-between items-center p-4 border rounded-lg hover-bg-light transition-all" style={{ background: 'var(--color-surface)' }}>
                 <div>
-                  <strong>{new Date(s.started_at).toLocaleDateString()}</strong>
-                  <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{s.note_title || 'General Session'}</div>
+                  <strong className="text-lg">{new Date(s.started_at).toLocaleDateString()}</strong>
+                  <div className="text-muted mt-1 flex items-center gap-2">
+                    <Clock size={14} /> {new Date(s.started_at).toLocaleTimeString()}
+                  </div>
+                  <div className="mt-2 font-medium">{s.note_title || 'General Study Session'}</div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontWeight: 600 }}>{s.duration_seconds > 0 ? Math.round(s.duration_seconds / 60) + ' min' : '-'}</div>
-                  <div style={{ fontSize: '0.75rem', color: s.status === 'COMPLETED' ? 'var(--color-success)' : 'var(--color-text-muted)' }}>{s.status}</div>
+                <div className="text-right">
+                  <div className="text-xl font-bold">{s.duration_seconds > 0 ? Math.round(s.duration_seconds / 60) + ' min' : '-'}</div>
+                  <div className={`mt-2 badge ${s.status === 'COMPLETED' ? 'badge-success' : 'badge-muted'}`}>
+                    {s.status}
+                  </div>
                 </div>
               </div>
-            ))}
+            )) : (
+              <div className="empty-state p-8">
+                <History size={32} className="mb-4" />
+                <p>No study sessions match your filters.</p>
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="card">
-          <h2 style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1rem' }}><Target size={20} /> Goals</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {goals.map(g => (
-              <div key={g.id} style={{ padding: '1rem', border: '1px solid var(--color-border)', borderRadius: '6px' }}>
-                <h4 style={{ marginBottom: '0.5rem' }}>{g.title}</h4>
-                <div style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)', marginBottom: '0.5rem' }}>{g.goal_type}</div>
-                <div style={{ width: '100%', background: 'var(--color-bg-secondary)', height: '8px', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, (g.current_value / g.target_value) * 100)}%`, background: 'var(--color-primary)', height: '100%' }} />
+        <div className="card shadow-sm border rounded-lg">
+          <div className="flex items-center gap-2 mb-6 pb-4" style={{ borderBottom: '1px solid var(--color-border)' }}>
+            <Target className="text-primary" size={20} />
+            <h2 className="font-semibold text-lg">Active Goals</h2>
+          </div>
+          
+          <div className="flex-col gap-4">
+            {goals.length > 0 ? goals.map(g => {
+              const progress = Math.min(100, (g.current_value / g.target_value) * 100);
+              return (
+                <div key={g.id} className="p-4 border rounded-lg bg-bg">
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="font-semibold">{g.title}</h4>
+                    <span className="badge badge-primary">{g.goal_type}</span>
+                  </div>
+                  
+                  <div className="w-full bg-surface border rounded-lg overflow-hidden mt-4" style={{ height: '8px' }}>
+                    <div style={{ width: `${progress}%`, background: 'var(--color-primary)', height: '100%', transition: 'width 0.5s ease' }} />
+                  </div>
+                  
+                  <div className="flex justify-between items-center mt-2 text-sm text-muted">
+                    <span>{g.current_value}</span>
+                    <span>{progress.toFixed(0)}%</span>
+                    <span>{g.target_value} {g.goal_type === 'MINUTES' ? 'min' : 'sessions'}</span>
+                  </div>
                 </div>
-                <div style={{ fontSize: '0.75rem', marginTop: '0.5rem', textAlign: 'right' }}>{g.current_value} / {g.target_value}</div>
+              );
+            }) : (
+              <div className="empty-state p-6">
+                <Target size={32} className="mb-4" />
+                <p>No active goals configured.</p>
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>
